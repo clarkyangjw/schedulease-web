@@ -1,7 +1,6 @@
 import { useState } from "react";
 import "./App.css";
 import Header from "./components/Header";
-import Navigation from "./components/Navigation";
 import AppointmentsPage from "./pages/AppointmentsPage";
 import ClientsPage from "./pages/ClientsPage";
 import ProvidersPage from "./pages/ProvidersPage";
@@ -19,8 +18,7 @@ function App() {
 
     return (
         <div className="bg-neutral-100 min-h-screen font-sans">
-            <Header />
-            <Navigation
+            <Header
                 tabs={tabs}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
