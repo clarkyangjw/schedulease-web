@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import ProviderForm from "../components/providers/ProviderForm";
+import WorkDays from "../components/common/WorkDays";
 import {
     getAllProviders,
     createProvider,
@@ -116,6 +117,9 @@ function ProvidersPage() {
                                         Description
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
+                                        Availability
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
                                         Status
                                     </th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">
@@ -127,7 +131,7 @@ function ProvidersPage() {
                                 {providers.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan="5"
+                                            colSpan="6"
                                             className="px-6 py-8 text-center text-sm text-neutral-500">
                                             No providers found
                                         </td>
@@ -166,6 +170,13 @@ function ProvidersPage() {
                                                         {provider.description ||
                                                             "-"}
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-neutral-600">
+                                                    {provider.availability ? (
+                                                        <WorkDays workDays={provider.availability} />
+                                                    ) : (
+                                                        "-"
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span

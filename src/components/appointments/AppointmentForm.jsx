@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getAllClients } from "../../api/clientApi";
 import { getAllProviders } from "../../api/providerApi";
 import { getAllServices } from "../../api/serviceApi";
+import { getAllAppointments, getAvailableProviders } from "../../api/appointmentApi";
 
 const STATUS_OPTIONS = [
     { value: "CONFIRMED", label: "Confirmed" },
@@ -22,10 +23,11 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
     });
 
     const [clients, setClients] = useState([]);
-    const [providers, setProviders] = useState([]);
+    const [availableProviders, setAvailableProviders] = useState([]); // Available providers from API
     const [services, setServices] = useState([]);
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(true);
+    const [loadingProviders, setLoadingProviders] = useState(false);
 
     useEffect(() => {
         loadOptions();
@@ -65,7 +67,7 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                 status: appointment.status || "CONFIRMED",
             });
 
-            setFormData({
+            const formDataToSet = {
                 clientId: appointment.clientId?.toString() || "",
                 providerId: appointment.providerId?.toString() || "",
                 serviceId: appointment.serviceId?.toString() || "",
@@ -73,22 +75,31 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                 status: appointment.status || "CONFIRMED",
                 notes: appointment.notes || "",
                 cancellationReason: appointment.cancellationReason || "",
-            });
+            };
+
+            setFormData(formDataToSet);
+
+            // Load available providers when loading appointment (for edit mode)
+            if (localDateTime && appointment.serviceId) {
+                // Use setTimeout to ensure services are loaded
+                setTimeout(() => {
+                    loadAvailableProviders(localDateTime, appointment.serviceId);
+                }, 100);
+            }
         }
     }, [appointment]);
 
     const loadOptions = async () => {
         try {
             setLoading(true);
-            const [clientsData, providersData, servicesData] =
+            const [clientsData, servicesData] =
                 await Promise.all([
                     getAllClients(),
-                    getAllProviders(),
                     getAllServices(true), // activeOnly
                 ]);
             setClients(clientsData);
-            setProviders(providersData);
             setServices(servicesData);
+            setAvailableProviders([]); // Initially empty, will be loaded when time and service are selected
         } catch (error) {
             console.error("Error loading options:", error);
             alert("Failed to load form options. Please refresh the page.");
@@ -97,12 +108,77 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
         }
     };
 
+    // Load available providers from backend API
+    const loadAvailableProviders = async (startTimeValue, serviceIdValue) => {
+        if (!startTimeValue || !serviceIdValue) {
+            setAvailableProviders([]);
+            return;
+        }
+
+        try {
+            setLoadingProviders(true);
+            // Convert datetime-local to timestamp (seconds)
+            const startDate = new Date(startTimeValue);
+            const timestampMs = startDate.getTime();
+            const timestampSeconds = Math.floor(timestampMs / 1000);
+
+            const providers = await getAvailableProviders(timestampSeconds, parseInt(serviceIdValue, 10));
+            setAvailableProviders(providers);
+
+            // If currently selected provider is not in available list, clear it
+            if (
+                formData.providerId &&
+                !providers.find((p) => p.id.toString() === formData.providerId)
+            ) {
+                setFormData((prev) => ({
+                    ...prev,
+                    providerId: "",
+                }));
+            }
+        } catch (error) {
+            console.error("Error loading available providers:", error);
+            setAvailableProviders([]);
+            alert("Failed to load available providers. Please try again.");
+        } finally {
+            setLoadingProviders(false);
+        }
+    };
+
+
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({
-            ...prev,
+        const newFormData = {
+            ...formData,
             [name]: value,
-        }));
+        };
+
+        // When startTime changes, clear provider and reload available providers if service is already selected
+        if (name === "startTime") {
+            newFormData.providerId = ""; // Clear provider when time changes
+            // Keep serviceId if already selected
+            if (formData.serviceId) {
+                // If service is already selected, reload providers with new time
+                setTimeout(() => {
+                    loadAvailableProviders(value, formData.serviceId);
+                }, 0);
+            } else {
+                setAvailableProviders([]);
+            }
+        }
+
+        // When service changes, clear provider and reload available providers if startTime is already selected
+        if (name === "serviceId") {
+            newFormData.providerId = ""; // Clear provider when service changes
+            if (value && formData.startTime) {
+                // Load available providers for the selected time and service
+                loadAvailableProviders(formData.startTime, value);
+            } else {
+                setAvailableProviders([]);
+            }
+        }
+
+        setFormData(newFormData);
+
         // Clear error when user starts typing
         if (errors[name]) {
             setErrors((prev) => ({
@@ -190,123 +266,158 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                     </button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label
-                                htmlFor="clientId"
-                                className="block text-sm font-medium text-neutral-700 mb-1">
-                                Client <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                                id="clientId"
-                                name="clientId"
-                                value={formData.clientId}
-                                onChange={handleChange}
-                                className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                                    errors.clientId
-                                        ? "border-red-500"
-                                        : "border-neutral-300"
-                                }`}>
-                                <option value="">Select client</option>
-                                {clients.map((client) => (
-                                    <option key={client.id} value={client.id}>
-                                        {client.firstName} {client.lastName}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.clientId && (
-                                <p className="text-red-500 text-xs mt-1">
-                                    {errors.clientId}
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <label
-                                htmlFor="providerId"
-                                className="block text-sm font-medium text-neutral-700 mb-1">
-                                Provider <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                                id="providerId"
-                                name="providerId"
-                                value={formData.providerId}
-                                onChange={handleChange}
-                                className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                                    errors.providerId
-                                        ? "border-red-500"
-                                        : "border-neutral-300"
-                                }`}>
-                                <option value="">Select provider</option>
-                                {providers.map((provider) => (
-                                    <option
-                                        key={provider.id}
-                                        value={provider.id}>
-                                        {provider.firstName} {provider.lastName}
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.providerId && (
-                                <p className="text-red-500 text-xs mt-1">
-                                    {errors.providerId}
-                                </p>
-                            )}
-                        </div>
+                    {/* Step 1: Client */}
+                    <div className="mb-4">
+                        <label
+                            htmlFor="clientId"
+                            className="block text-sm font-medium text-neutral-700 mb-1">
+                            Client <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            id="clientId"
+                            name="clientId"
+                            value={formData.clientId}
+                            onChange={handleChange}
+                            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                                errors.clientId
+                                    ? "border-red-500"
+                                    : "border-neutral-300"
+                            }`}>
+                            <option value="">Select client</option>
+                            {clients.map((client) => (
+                                <option key={client.id} value={client.id}>
+                                    {client.firstName} {client.lastName}
+                                </option>
+                            ))}
+                        </select>
+                        {errors.clientId && (
+                            <p className="text-red-500 text-xs mt-1">
+                                {errors.clientId}
+                            </p>
+                        )}
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label
-                                htmlFor="serviceId"
-                                className="block text-sm font-medium text-neutral-700 mb-1">
-                                Service <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                                id="serviceId"
-                                name="serviceId"
-                                value={formData.serviceId}
-                                onChange={handleChange}
-                                className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                                    errors.serviceId
-                                        ? "border-red-500"
-                                        : "border-neutral-300"
-                                }`}>
-                                <option value="">Select service</option>
-                                {services.map((service) => (
-                                    <option key={service.id} value={service.id}>
-                                        {service.name} ({service.duration} min)
-                                    </option>
-                                ))}
-                            </select>
-                            {errors.serviceId && (
-                                <p className="text-red-500 text-xs mt-1">
-                                    {errors.serviceId}
+
+                    {/* Step 2: Start Time */}
+                    <div className="mb-4">
+                        <label
+                            htmlFor="startTime"
+                            className="block text-sm font-medium text-neutral-700 mb-1">
+                            Start Time{" "}
+                            <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                            type="datetime-local"
+                            id="startTime"
+                            name="startTime"
+                            value={formData.startTime}
+                            onChange={handleChange}
+                            disabled={!formData.clientId}
+                            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                                errors.startTime
+                                    ? "border-red-500"
+                                    : "border-neutral-300"
+                            } ${!formData.clientId ? "bg-neutral-100 cursor-not-allowed" : ""}`}
+                        />
+                        {errors.startTime && (
+                            <p className="text-red-500 text-xs mt-1">
+                                {errors.startTime}
+                            </p>
+                        )}
+                        {!formData.clientId && (
+                            <p className="text-neutral-500 text-xs mt-1">
+                                Please select a client first
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Step 3: Service */}
+                    <div className="mb-4">
+                        <label
+                            htmlFor="serviceId"
+                            className="block text-sm font-medium text-neutral-700 mb-1">
+                            Service <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            id="serviceId"
+                            name="serviceId"
+                            value={formData.serviceId}
+                            onChange={handleChange}
+                            disabled={!formData.startTime}
+                            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                                errors.serviceId
+                                    ? "border-red-500"
+                                    : "border-neutral-300"
+                            } ${!formData.startTime ? "bg-neutral-100 cursor-not-allowed" : ""}`}>
+                            <option value="">
+                                {!formData.startTime
+                                    ? "Select start time first"
+                                    : "Select service"}
+                            </option>
+                            {services.map((service) => (
+                                <option key={service.id} value={service.id}>
+                                    {service.name} ({service.duration} min)
+                                </option>
+                            ))}
+                        </select>
+                        {errors.serviceId && (
+                            <p className="text-red-500 text-xs mt-1">
+                                {errors.serviceId}
+                            </p>
+                        )}
+                        {!formData.startTime && (
+                            <p className="text-neutral-500 text-xs mt-1">
+                                Please select a start time first
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Step 4: Provider (filtered by startTime and service) */}
+                    <div className="mb-4">
+                        <label
+                            htmlFor="providerId"
+                            className="block text-sm font-medium text-neutral-700 mb-1">
+                            Provider <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                            id="providerId"
+                            name="providerId"
+                            value={formData.providerId}
+                            onChange={handleChange}
+                            disabled={!formData.serviceId || loadingProviders}
+                            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                                errors.providerId
+                                    ? "border-red-500"
+                                    : "border-neutral-300"
+                            } ${!formData.serviceId || loadingProviders ? "bg-neutral-100 cursor-not-allowed" : ""}`}>
+                            <option value="">
+                                {loadingProviders
+                                    ? "Loading available providers..."
+                                    : !formData.serviceId
+                                    ? "Select service first"
+                                    : availableProviders.length === 0
+                                    ? "No available providers for this time slot"
+                                    : "Select provider"}
+                            </option>
+                            {availableProviders.map((provider) => (
+                                <option
+                                    key={provider.id}
+                                    value={provider.id}>
+                                    {provider.firstName} {provider.lastName}
+                                </option>
+                            ))}
+                        </select>
+                        {errors.providerId && (
+                            <p className="text-red-500 text-xs mt-1">
+                                {errors.providerId}
+                            </p>
+                        )}
+                        {formData.serviceId &&
+                            !loadingProviders &&
+                            availableProviders.length === 0 && (
+                                <p className="text-orange-500 text-xs mt-1">
+                                    No providers are available for this time slot and service duration
                                 </p>
                             )}
-                        </div>
-                        <div>
-                            <label
-                                htmlFor="startTime"
-                                className="block text-sm font-medium text-neutral-700 mb-1">
-                                Start Time{" "}
-                                <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="datetime-local"
-                                id="startTime"
-                                name="startTime"
-                                value={formData.startTime}
-                                onChange={handleChange}
-                                className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                                    errors.startTime
-                                        ? "border-red-500"
-                                        : "border-neutral-300"
-                                }`}
-                            />
-                            {errors.startTime && (
-                                <p className="text-red-500 text-xs mt-1">
-                                    {errors.startTime}
-                                </p>
-                            )}
-                        </div>
                     </div>
                     {appointment && (
                         <div className="mb-4">

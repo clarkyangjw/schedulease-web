@@ -240,11 +240,24 @@ function AppointmentsPage() {
                 loadAppointments();
             }
         } catch (err) {
-            alert(
-                `Failed to ${
-                    editingAppointment ? "update" : "create"
-                } appointment. Please try again.`
-            );
+            // Extract error message from response
+            let errorMessage = `Failed to ${
+                editingAppointment ? "update" : "create"
+            } appointment.`;
+            
+            // Try to get more specific error message
+            if (err.message) {
+                if (err.message.includes("Time slot is not available") || 
+                    err.message.includes("not available")) {
+                    errorMessage = "This time slot is not available. The provider already has an appointment at this time. Please choose a different time.";
+                } else if (err.message.includes("not found")) {
+                    errorMessage = "One of the selected items (client, provider, or service) was not found. Please refresh the page and try again.";
+                } else {
+                    errorMessage = err.message;
+                }
+            }
+            
+            alert(errorMessage);
             console.error(err);
         }
     };

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import WorkDays from "../common/WorkDays";
 
 function ProviderForm({ provider, onSave, onCancel }) {
     const [formData, setFormData] = useState({
@@ -6,6 +7,7 @@ function ProviderForm({ provider, onSave, onCancel }) {
         lastName: "",
         description: "",
         isActive: true,
+        availability: "",
     });
 
     const [errors, setErrors] = useState({});
@@ -17,6 +19,7 @@ function ProviderForm({ provider, onSave, onCancel }) {
                 lastName: provider.lastName || "",
                 description: provider.description || "",
                 isActive: provider.isActive !== undefined ? provider.isActive : true,
+                availability: provider.availability || "",
             });
         } else {
             setFormData({
@@ -24,6 +27,7 @@ function ProviderForm({ provider, onSave, onCancel }) {
                 lastName: "",
                 description: "",
                 isActive: true,
+                availability: "",
             });
         }
     }, [provider]);
@@ -143,6 +147,26 @@ function ProviderForm({ provider, onSave, onCancel }) {
                             className="w-full px-3 py-2 border border-neutral-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                             placeholder="Enter provider description"
                         />
+                    </div>
+                    <div className="mb-4">
+                        <label
+                            htmlFor="availability"
+                            className="block text-sm font-medium text-neutral-700 mb-2">
+                            Availability
+                        </label>
+                        <WorkDays
+                            workDays={formData.availability}
+                            editable={true}
+                            onChange={(value) => {
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    availability: value,
+                                }));
+                            }}
+                        />
+                        <p className="text-xs text-neutral-500 mt-2">
+                            Click on the day labels to select available days
+                        </p>
                     </div>
                     <div className="mb-6">
                         <label className="flex items-center space-x-2 cursor-pointer">

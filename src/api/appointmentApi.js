@@ -99,11 +99,23 @@ export const createAppointment = async (appointmentData) => {
         );
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(
-                errorData.message ||
-                    `Failed to create appointment: ${response.statusText}`
-            );
+            let errorMessage = `Failed to create appointment: ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                errorMessage =
+                    errorData.message || errorData.error || errorMessage;
+            } catch (e) {
+                // If response is not JSON, try to get text
+                try {
+                    const errorText = await response.text();
+                    if (errorText) {
+                        errorMessage = errorText;
+                    }
+                } catch (e2) {
+                    // Use default error message
+                }
+            }
+            throw new Error(errorMessage);
         }
 
         return await response.json();
@@ -181,6 +193,42 @@ export const deleteAppointment = async (id) => {
         }
     } catch (error) {
         console.error("Error deleting appointment:", error);
+        throw error;
+    }
+};
+
+/**
+ * Get available providers for a given time slot and service
+ * @param {number} startTime - Start time timestamp (seconds)
+ * @param {number} serviceId - Service ID to determine duration
+ * @returns {Promise<Array>} Array of available provider objects
+ */
+export const getAvailableProviders = async (startTime, serviceId) => {
+    try {
+        // Convert to seconds if in milliseconds (backend expects seconds)
+        const startTimeSeconds =
+            startTime >= 10000000000
+                ? Math.floor(startTime / 1000)
+                : startTime;
+
+        const url = `${API_BASE_URL}${APPOINTMENTS_ENDPOINT}/available-providers?startTime=${startTimeSeconds}&serviceId=${serviceId}`;
+
+        const response = await fetch(url, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                `Failed to fetch available providers: ${response.statusText}`
+            );
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error fetching available providers:", error);
         throw error;
     }
 };
