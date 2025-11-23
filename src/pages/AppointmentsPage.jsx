@@ -163,13 +163,15 @@ function AppointmentsPage() {
                 // Check if only status changed (and no other fields)
                 // Convert to numbers for comparison to handle string/number mismatches
                 const clientIdChanged =
-                    Number(appointmentData.clientId) !== Number(editingAppointment.clientId);
+                    Number(appointmentData.clientId) !==
+                    Number(editingAppointment.clientId);
                 const providerIdChanged =
                     Number(appointmentData.providerId) !==
                     Number(editingAppointment.providerId);
                 const serviceIdChanged =
-                    Number(appointmentData.serviceId) !== Number(editingAppointment.serviceId);
-                
+                    Number(appointmentData.serviceId) !==
+                    Number(editingAppointment.serviceId);
+
                 // appointmentData.startTime is in seconds, editingAppointment.startTime is in milliseconds
                 // Convert editingAppointment.startTime to seconds for comparison
                 const editingStartTimeSeconds = Math.floor(
@@ -177,11 +179,11 @@ function AppointmentsPage() {
                 );
                 const startTimeChanged =
                     appointmentData.startTime !== editingStartTimeSeconds;
-                
+
                 const statusChanged =
                     appointmentData.status &&
                     appointmentData.status !== editingAppointment.status;
-                
+
                 // Normalize notes for comparison: treat null, undefined, and empty string as the same
                 const appointmentNotes = appointmentData.notes || "";
                 const editingNotes = editingAppointment.notes || "";
@@ -244,19 +246,23 @@ function AppointmentsPage() {
             let errorMessage = `Failed to ${
                 editingAppointment ? "update" : "create"
             } appointment.`;
-            
+
             // Try to get more specific error message
             if (err.message) {
-                if (err.message.includes("Time slot is not available") || 
-                    err.message.includes("not available")) {
-                    errorMessage = "This time slot is not available. The provider already has an appointment at this time. Please choose a different time.";
+                if (
+                    err.message.includes("Time slot is not available") ||
+                    err.message.includes("not available")
+                ) {
+                    errorMessage =
+                        "This time slot is not available. The provider already has an appointment at this time. Please choose a different time.";
                 } else if (err.message.includes("not found")) {
-                    errorMessage = "One of the selected items (client, provider, or service) was not found. Please refresh the page and try again.";
+                    errorMessage =
+                        "One of the selected items (client, provider, or service) was not found. Please refresh the page and try again.";
                 } else {
                     errorMessage = err.message;
                 }
             }
-            
+
             alert(errorMessage);
             console.error(err);
         }
@@ -362,6 +368,40 @@ function AppointmentsPage() {
         weekDays.push(day);
     }
 
+    // Calculate statistics for current week
+    const calculateStatistics = () => {
+        const stats = {
+            total: appointments.length,
+            confirmed: 0,
+            completed: 0,
+            cancelled: 0,
+            noShow: 0,
+        };
+
+        appointments.forEach((appointment) => {
+            switch (appointment.status) {
+                case "CONFIRMED":
+                    stats.confirmed++;
+                    break;
+                case "COMPLETED":
+                    stats.completed++;
+                    break;
+                case "CANCELLED":
+                    stats.cancelled++;
+                    break;
+                case "NO_SHOW":
+                    stats.noShow++;
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        return stats;
+    };
+
+    const statistics = calculateStatistics();
+
     return (
         <section id="content-appointment">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
@@ -416,21 +456,51 @@ function AppointmentsPage() {
                     </div>
                     {/* Status Legend - Right */}
                     <div className="flex items-center gap-6">
+                        {/* Total */}
                         <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-blue-50 border-l-4 border-primary rounded"></div>
-                            <span className="text-sm text-neutral-700">Confirmed</span>
+                            <span className="text-sm font-semibold text-neutral-800">
+                                Total: {statistics.total} appointments
+                            </span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-green-50 border-l-4 border-secondary rounded"></div>
-                            <span className="text-sm text-neutral-700">Completed</span>
+                            <div className="px-3 py-1.5 bg-blue-50 border-l-4 border-primary rounded flex items-center justify-center gap-1.5">
+                                <span className="text-xs font-semibold text-neutral-800">
+                                    {statistics.confirmed}
+                                </span>
+                                <span className="text-xs text-neutral-700">
+                                    Confirmed
+                                </span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-red-50 border-l-4 border-red-500 rounded"></div>
-                            <span className="text-sm text-neutral-700">Cancelled</span>
+                            <div className="px-3 py-1.5 bg-green-50 border-l-4 border-secondary rounded flex items-center justify-center gap-1.5">
+                                <span className="text-xs font-semibold text-neutral-800">
+                                    {statistics.completed}
+                                </span>
+                                <span className="text-xs text-neutral-700">
+                                    Completed
+                                </span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-yellow-50 border-l-4 border-yellow-500 rounded"></div>
-                            <span className="text-sm text-neutral-700">No Show</span>
+                            <div className="px-3 py-1.5 bg-red-50 border-l-4 border-red-500 rounded flex items-center justify-center gap-1.5">
+                                <span className="text-xs font-semibold text-neutral-800">
+                                    {statistics.cancelled}
+                                </span>
+                                <span className="text-xs text-neutral-700">
+                                    Cancelled
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="px-3 py-1.5 bg-yellow-50 border-l-4 border-yellow-500 rounded flex items-center justify-center gap-1.5">
+                                <span className="text-xs font-semibold text-neutral-800">
+                                    {statistics.noShow}
+                                </span>
+                                <span className="text-xs text-neutral-700">
+                                    No Show
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
