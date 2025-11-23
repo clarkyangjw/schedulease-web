@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
 import { getAllClients } from "../../api/clientApi";
-import { getAllProviders } from "../../api/providerApi";
+import { getAllProviders, getProviderById } from "../../api/providerApi";
 import { getAllServices } from "../../api/serviceApi";
-import { getAllAppointments, getAvailableProviders } from "../../api/appointmentApi";
+import {
+    getAllAppointments,
+    getAvailableProviders,
+} from "../../api/appointmentApi";
 
 const STATUS_OPTIONS = [
     { value: "CONFIRMED", label: "Confirmed" },
@@ -83,7 +86,11 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
             if (localDateTime && appointment.serviceId) {
                 // Use setTimeout to ensure services are loaded
                 setTimeout(() => {
-                    loadAvailableProviders(localDateTime, appointment.serviceId);
+                    loadAvailableProviders(
+                        localDateTime,
+                        appointment.serviceId,
+                        appointment.providerId // Pass current provider ID for edit mode
+                    );
                 }, 100);
             }
         }
@@ -92,11 +99,10 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
     const loadOptions = async () => {
         try {
             setLoading(true);
-            const [clientsData, servicesData] =
-                await Promise.all([
-                    getAllClients(),
-                    getAllServices(true), // activeOnly
-                ]);
+            const [clientsData, servicesData] = await Promise.all([
+                getAllClients(),
+                getAllServices(true), // activeOnly
+            ]);
             setClients(clientsData);
             setServices(servicesData);
             setAvailableProviders([]); // Initially empty, will be loaded when time and service are selected
@@ -109,7 +115,11 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
     };
 
     // Load available providers from backend API
-    const loadAvailableProviders = async (startTimeValue, serviceIdValue) => {
+    const loadAvailableProviders = async (
+        startTimeValue,
+        serviceIdValue,
+        currentProviderId = null
+    ) => {
         if (!startTimeValue || !serviceIdValue) {
             setAvailableProviders([]);
             return;
@@ -122,13 +132,45 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
             const timestampMs = startDate.getTime();
             const timestampSeconds = Math.floor(timestampMs / 1000);
 
-            const providers = await getAvailableProviders(timestampSeconds, parseInt(serviceIdValue, 10));
-            setAvailableProviders(providers);
+            const providers = await getAvailableProviders(
+                timestampSeconds,
+                parseInt(serviceIdValue, 10)
+            );
 
-            // If currently selected provider is not in available list, clear it
+            // In edit mode, if current appointment's provider is not in available list,
+            // add it to the list (because it's the current appointment causing the conflict)
+            let finalProviders = [...providers];
+            if (currentProviderId && appointment) {
+                const currentProviderIdStr = currentProviderId.toString();
+                const isProviderInList = providers.find(
+                    (p) => p.id.toString() === currentProviderIdStr
+                );
+
+                if (!isProviderInList) {
+                    // Get the provider details and add it to the list
+                    try {
+                        const currentProvider = await getProviderById(
+                            parseInt(currentProviderIdStr, 10)
+                        );
+                        finalProviders.push(currentProvider);
+                    } catch (error) {
+                        console.error(
+                            "Error fetching current provider:",
+                            error
+                        );
+                    }
+                }
+            }
+
+            setAvailableProviders(finalProviders);
+
+            // If currently selected provider is not in available list (and not in edit mode), clear it
             if (
                 formData.providerId &&
-                !providers.find((p) => p.id.toString() === formData.providerId)
+                !finalProviders.find(
+                    (p) => p.id.toString() === formData.providerId
+                ) &&
+                !appointment // Only clear if not editing
             ) {
                 setFormData((prev) => ({
                     ...prev,
@@ -144,7 +186,6 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
         }
     };
 
-
     const handleChange = (e) => {
         const { name, value } = e.target;
         const newFormData = {
@@ -152,26 +193,46 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
             [name]: value,
         };
 
-        // When startTime changes, clear provider and reload available providers if service is already selected
+        // When startTime changes, reload available providers if service is already selected
         if (name === "startTime") {
-            newFormData.providerId = ""; // Clear provider when time changes
+            // In edit mode, keep current provider; otherwise clear it
+            if (!appointment) {
+                newFormData.providerId = ""; // Clear provider when time changes (new appointment)
+            }
             // Keep serviceId if already selected
             if (formData.serviceId) {
                 // If service is already selected, reload providers with new time
+                const currentProviderId = appointment
+                    ? formData.providerId
+                    : null;
                 setTimeout(() => {
-                    loadAvailableProviders(value, formData.serviceId);
+                    loadAvailableProviders(
+                        value,
+                        formData.serviceId,
+                        currentProviderId
+                    );
                 }, 0);
             } else {
                 setAvailableProviders([]);
             }
         }
 
-        // When service changes, clear provider and reload available providers if startTime is already selected
+        // When service changes, reload available providers if startTime is already selected
         if (name === "serviceId") {
-            newFormData.providerId = ""; // Clear provider when service changes
+            // In edit mode, keep current provider; otherwise clear it
+            if (!appointment) {
+                newFormData.providerId = ""; // Clear provider when service changes (new appointment)
+            }
             if (value && formData.startTime) {
                 // Load available providers for the selected time and service
-                loadAvailableProviders(formData.startTime, value);
+                const currentProviderId = appointment
+                    ? formData.providerId
+                    : null;
+                loadAvailableProviders(
+                    formData.startTime,
+                    value,
+                    currentProviderId
+                );
             } else {
                 setAvailableProviders([]);
             }
@@ -202,12 +263,6 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
         if (!formData.startTime) {
             newErrors.startTime = "Start time is required";
         }
-        if (
-            formData.status === "CANCELLED" &&
-            !formData.cancellationReason.trim()
-        ) {
-            newErrors.cancellationReason = "Cancellation reason is required";
-        }
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -234,7 +289,7 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                 submitData.status = formData.status;
                 if (formData.status === "CANCELLED") {
                     submitData.cancellationReason =
-                        formData.cancellationReason || null;
+                        formData.cancellationReason?.trim() || null;
                 }
             }
 
@@ -302,8 +357,7 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                         <label
                             htmlFor="startTime"
                             className="block text-sm font-medium text-neutral-700 mb-1">
-                            Start Time{" "}
-                            <span className="text-red-500">*</span>
+                            Start Time <span className="text-red-500">*</span>
                         </label>
                         <input
                             type="datetime-local"
@@ -316,7 +370,11 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                                 errors.startTime
                                     ? "border-red-500"
                                     : "border-neutral-300"
-                            } ${!formData.clientId ? "bg-neutral-100 cursor-not-allowed" : ""}`}
+                            } ${
+                                !formData.clientId
+                                    ? "bg-neutral-100 cursor-not-allowed"
+                                    : ""
+                            }`}
                         />
                         {errors.startTime && (
                             <p className="text-red-500 text-xs mt-1">
@@ -347,7 +405,11 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                                 errors.serviceId
                                     ? "border-red-500"
                                     : "border-neutral-300"
-                            } ${!formData.startTime ? "bg-neutral-100 cursor-not-allowed" : ""}`}>
+                            } ${
+                                !formData.startTime
+                                    ? "bg-neutral-100 cursor-not-allowed"
+                                    : ""
+                            }`}>
                             <option value="">
                                 {!formData.startTime
                                     ? "Select start time first"
@@ -388,7 +450,11 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                                 errors.providerId
                                     ? "border-red-500"
                                     : "border-neutral-300"
-                            } ${!formData.serviceId || loadingProviders ? "bg-neutral-100 cursor-not-allowed" : ""}`}>
+                            } ${
+                                !formData.serviceId || loadingProviders
+                                    ? "bg-neutral-100 cursor-not-allowed"
+                                    : ""
+                            }`}>
                             <option value="">
                                 {loadingProviders
                                     ? "Loading available providers..."
@@ -399,9 +465,7 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                                     : "Select provider"}
                             </option>
                             {availableProviders.map((provider) => (
-                                <option
-                                    key={provider.id}
-                                    value={provider.id}>
+                                <option key={provider.id} value={provider.id}>
                                     {provider.firstName} {provider.lastName}
                                 </option>
                             ))}
@@ -415,7 +479,8 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                             !loadingProviders &&
                             availableProviders.length === 0 && (
                                 <p className="text-orange-500 text-xs mt-1">
-                                    No providers are available for this time slot and service duration
+                                    No providers are available for this time
+                                    slot and service duration
                                 </p>
                             )}
                     </div>
@@ -447,8 +512,7 @@ function AppointmentForm({ appointment, onSave, onCancel }) {
                             <label
                                 htmlFor="cancellationReason"
                                 className="block text-sm font-medium text-neutral-700 mb-1">
-                                Cancellation Reason{" "}
-                                <span className="text-red-500">*</span>
+                                Cancellation Reason
                             </label>
                             <textarea
                                 id="cancellationReason"

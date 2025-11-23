@@ -7,32 +7,28 @@ import ProvidersPage from "./pages/ProvidersPage";
 import ServicesPage from "./pages/ServicesPage";
 
 function App() {
-    const [activeTab, setActiveTab] = useState("appointment");
+	const [activeTab, setActiveTab] = useState("appointment");
 
-    const tabs = [
-        { id: "appointment", label: "Appointments", icon: "fa-calendar-week" },
-        { id: "clients", label: "Clients", icon: "fa-users" },
-        { id: "providers", label: "Providers", icon: "fa-user-tie" },
-        { id: "services", label: "Services", icon: "fa-concierge-bell" },
-    ];
+	const tabs = [
+		{ id: "appointment", label: "Appointments", icon: "fa-calendar-week" },
+		{ id: "services", label: "Services", icon: "fa-concierge-bell" },
+		{ id: "clients", label: "Clients", icon: "fa-users" },
+		{ id: "providers", label: "Providers", icon: "fa-user-tie" },
+	];
 
-    return (
-        <div className="bg-neutral-100 min-h-screen font-sans">
-            <Header
-                tabs={tabs}
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-            />
+	return (
+		<div className="bg-neutral-100 min-h-screen font-sans">
+			<Header tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-            {/* Content Area */}
-            <main className="container mx-auto px-4 py-6">
-                {activeTab === "appointment" && <AppointmentsPage />}
-                {activeTab === "clients" && <ClientsPage />}
-                {activeTab === "providers" && <ProvidersPage />}
-                {activeTab === "services" && <ServicesPage />}
-            </main>
-        </div>
-    );
+			{/* Content Area */}
+			<main className="container mx-auto px-4 py-6">
+				{activeTab === "appointment" && <AppointmentsPage />}
+				{activeTab === "clients" && <ClientsPage />}
+				{activeTab === "providers" && <ProvidersPage />}
+				{activeTab === "services" && <ServicesPage />}
+			</main>
+		</div>
+	);
 }
 
 export default App;
