@@ -391,7 +391,9 @@ function AppointmentsPage() {
 
             {/* Weekly Calendar View */}
             <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-                <div className="flex justify-center items-center mb-4">
+                {/* Date Navigation and Status Legend */}
+                <div className="flex justify-between items-center mb-4 pb-4 border-b border-neutral-200">
+                    {/* Date Navigation - Left */}
                     <div className="flex items-center space-x-4">
                         <button
                             onClick={goToPreviousWeek}
@@ -411,6 +413,25 @@ function AppointmentsPage() {
                             className="ml-2 px-3 py-1 border border-neutral-300 rounded-md text-sm text-neutral-700 hover:bg-neutral-50 transition-colors">
                             Today
                         </button>
+                    </div>
+                    {/* Status Legend - Right */}
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-blue-50 border-l-4 border-primary rounded"></div>
+                            <span className="text-sm text-neutral-700">Confirmed</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-green-50 border-l-4 border-secondary rounded"></div>
+                            <span className="text-sm text-neutral-700">Completed</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-red-50 border-l-4 border-red-500 rounded"></div>
+                            <span className="text-sm text-neutral-700">Cancelled</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 bg-yellow-50 border-l-4 border-yellow-500 rounded"></div>
+                            <span className="text-sm text-neutral-700">No Show</span>
+                        </div>
                     </div>
                 </div>
                 {/* Weekday Headers */}
